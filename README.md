@@ -170,6 +170,6 @@ The application can be organized around these core components:
 - The `Data/music/` directory is kept with `.gitkeep`, but audio files are ignored by Git.
 - `miniaudio.h` is included as a third-party single-header audio library.
 
-## Author
+---
 
-Fatima
+**Author:** Fatima
