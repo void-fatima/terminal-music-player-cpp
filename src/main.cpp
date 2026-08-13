@@ -1,7 +1,8 @@
+#include "Application.h"
+
 #include <iostream>
 
-int main()
-{
-    std::cout << "Terminal Music Player" << std::endl;
-    return 0;
+int main() {
+    music_player::Application application{std::cin, std::cout};
+    return application.run();
 }
