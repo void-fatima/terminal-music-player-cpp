@@ -4,6 +4,8 @@ project(terminal_music_player LANGUAGES CXX)
 add_executable(terminal-music-player
     src/main.cpp
     src/Application.cpp
+    src/MusicLibrary.cpp
+    src/Song.cpp
 )
 
 target_compile_features(terminal-music-player PRIVATE cxx_std_17)
