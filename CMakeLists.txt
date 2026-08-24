@@ -7,11 +7,17 @@ add_executable(terminal-music-player
     src/ConfigManager.cpp
     src/DataLoader.cpp
     src/MusicLibrary.cpp
+    src/Player.cpp
     src/Playlist.cpp
     src/Song.cpp
 )
 
 target_compile_features(terminal-music-player PRIVATE cxx_std_17)
+find_package(Threads REQUIRED)
+target_link_libraries(terminal-music-player PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+if(UNIX AND NOT APPLE)
+    target_link_libraries(terminal-music-player PRIVATE m)
+endif()
 
 if(MSVC)
     target_compile_options(terminal-music-player PRIVATE /W4 /permissive-)
