@@ -6,4 +6,3 @@ must not be used to claim implemented artwork, waveform/spectrum data, commands,
 
 The current, automatically captured application screenshot is
 [`../terminal-music-player-actual.png`](../terminal-music-player-actual.png).
-
