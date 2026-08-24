@@ -6,6 +6,7 @@ include(FetchContent)
 find_package(Threads REQUIRED)
 
 option(MUSIC_PLAYER_WARNINGS_AS_ERRORS "Treat first-party compiler warnings as errors" OFF)
+option(MUSIC_PLAYER_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
 # FTXUI 7.0.1 is pinned for reproducible, cross-platform raw keyboard input,
 # resize-aware layout, Unicode cell measurement, and NO_COLOR support.
@@ -32,6 +33,10 @@ function(music_player_warnings target_name)
         if(MUSIC_PLAYER_WARNINGS_AS_ERRORS)
             target_compile_options(${target_name} PRIVATE -Werror)
         endif()
+    endif()
+    if(MUSIC_PLAYER_ENABLE_SANITIZERS AND NOT MSVC)
+        target_compile_options(${target_name} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(${target_name} PRIVATE -fsanitize=address,undefined)
     endif()
 endfunction()
 
@@ -62,6 +67,9 @@ target_compile_features(music-player-audio PUBLIC cxx_std_17)
 target_link_libraries(music-player-audio PUBLIC music-player-core PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 if(WIN32)
     target_link_libraries(music-player-audio PRIVATE ole32 winmm uuid avrt)
+elseif(APPLE)
+    target_link_libraries(music-player-audio PRIVATE
+        "-framework CoreFoundation" "-framework CoreAudio" "-framework AudioUnit")
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(music-player-audio PRIVATE m)
 endif()

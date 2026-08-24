@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "refactor/**", "feature/**", "fix/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu GCC Debug + sanitizers
+            os: ubuntu-latest
+            compiler: gcc
+            build_type: Debug
+            sanitizers: "ON"
+          - name: Ubuntu Clang Release
+            os: ubuntu-latest
+            compiler: clang
+            build_type: Release
+            sanitizers: "OFF"
+          - name: macOS Clang Release
+            os: macos-latest
+            compiler: clang
+            build_type: Release
+            sanitizers: "OFF"
+          - name: Windows MSVC Debug
+            os: windows-latest
+            compiler: msvc
+            build_type: Debug
+            sanitizers: "OFF"
+          - name: Windows MSVC Release
+            os: windows-latest
+            compiler: msvc
+            build_type: Release
+            sanitizers: "OFF"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select GCC
+        if: matrix.compiler == 'gcc'
+        run: |
+          echo "CC=gcc" >> "$GITHUB_ENV"
+          echo "CXX=g++" >> "$GITHUB_ENV"
+
+      - name: Select Clang
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CXX=clang++" >> "$GITHUB_ENV"
+
+      - name: Configure (Ninja)
+        if: matrix.compiler != 'msvc'
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DMUSIC_PLAYER_WARNINGS_AS_ERRORS=ON
+          -DMUSIC_PLAYER_ENABLE_SANITIZERS=${{ matrix.sanitizers }}
+
+      - name: Configure (MSVC)
+        if: matrix.compiler == 'msvc'
+        run: >-
+          cmake -S . -B build -A x64
+          -DMUSIC_PLAYER_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel 4
+
+      - name: Test
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --parallel 4 --output-on-failure
