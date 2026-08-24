@@ -1,40 +1,59 @@
-# Core Music Architecture
+# Core Architecture
 
-The core metadata layer has three focused responsibilities:
+The application separates terminal workflow, metadata, persistence, and audio device lifecycles.
 
 ```text
-Application
-    |
-    +-- MusicLibrary
-            |
-            +-- Song
+main
+  └── Application
+      ├── MusicLibrary ── owns ──> Song
+      ├── Playlist[] ── references songs by stable ID
+      ├── ConfigManager ── reads/writes settings.cfg
+      ├── CsvLoader / M3uLoader
+      └── Player ── owns queue copies and miniaudio resources
 ```
 
-## Song
+## Domain and loading
 
-`Song` is a value object for one track's metadata. It stores a numeric ID, title,
-artist, album, genre, filesystem path, and millisecond duration. It does not load,
-decode, or play audio.
+`Song` is a value object containing a stable numeric ID, metadata, year, duration, and resolved file
+path. `MusicLibrary` owns songs and provides case-insensitive search, exact filters, lookup by ID,
+and stable sorting.
 
-## MusicLibrary
+`CsvLoader` parses the seven-column library format. It accepts quoted commas and escaped quotes,
+validates numeric fields, resolves relative paths, and collects non-fatal warnings. `M3uLoader`
+discovers playlists in deterministic filename order and maps track paths back to library song IDs.
 
-`MusicLibrary` owns the collection of `Song` values. It rejects duplicate song
-IDs and provides lookup, case-insensitive metadata search and genre filtering,
-and stable sorting by title or artist.
+`Playlist` stores IDs rather than references. Sorting or reallocating the library therefore does not
+invalidate playlist membership.
 
-Queries return const references to library-owned songs to avoid unnecessary
-copies. Those references should be treated as short-lived views and reacquired
-after adding or sorting songs.
+## Playback
 
-## Application
+`Player` hides miniaudio behind a private implementation so the third-party header does not leak
+through the rest of the source tree. It owns copied queue entries, the current index, playback state,
+volume, mode, audio engine, and active sound. Audio cleanup follows RAII and happens in the reverse
+order of initialization.
 
-`Application` owns the `MusicLibrary` and remains responsible for top-level
-terminal navigation and program flow. This step does not change the existing
-screens or implement the full library interface.
+Repeat behavior is handled at the queue boundary:
 
-## Playback boundary
+- `NO_REPEAT` stops at the final track.
+- `REPEAT_ONE` restarts the completed track.
+- `REPEAT_ALL` wraps the queue.
+- `SHUFFLE` chooses another queue entry and avoids an immediate duplicate when possible.
 
-Playback is intentionally separate from both metadata classes. Audio device
-management, decoding, playback state, and queue behavior have different
-lifecycles and will belong to later components. Keeping that work outside
-`Song` and `MusicLibrary` lets the metadata layer remain simple and testable.
+The application calls `Player::update()` at interaction boundaries to detect completion and advance
+the queue. Device and decoder failures are returned as user-facing errors rather than exceptions.
+
+## Application and persistence
+
+`Application` owns all long-lived components and coordinates screen loops. Input and output streams
+are injected, which allows the full menu workflow to be tested without controlling a real terminal.
+The data directory is also injectable and can be selected at runtime with `--data-dir`.
+
+`ConfigManager` loads safe defaults when settings are absent or malformed. It writes through a
+temporary file before replacing the stored configuration, avoiding partially written settings after
+normal I/O failures.
+
+## Tests
+
+`CoreTests.cpp` covers CSV edge cases, M3U matching, search/filter behavior, and settings round trips.
+`ApplicationTests.cpp` runs a scripted end-to-end terminal session and verifies navigation, persisted
+preferences, playlist selection, and graceful exit. Both are registered with CTest.
