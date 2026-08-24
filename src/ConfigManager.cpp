@@ -24,7 +24,9 @@ std::string cleanValue(std::string value) {
 
 }  // namespace
 
-ConfigManager::ConfigManager(std::filesystem::path file) : file_(std::move(file)) {}
+ConfigManager::ConfigManager(std::filesystem::path file,
+                             std::shared_ptr<IAtomicFileOps> operations)
+    : file_(std::move(file)), writer_(std::move(operations)) {}
 
 AppSettings ConfigManager::load() const {
     AppSettings settings;
@@ -54,33 +56,14 @@ AppSettings ConfigManager::load() const {
 }
 
 bool ConfigManager::save(const AppSettings& settings, std::string& error) const {
-    std::error_code filesystemError;
-    std::filesystem::create_directories(file_.parent_path(), filesystemError);
-    const auto temporary = file_.string() + ".tmp";
-    std::ofstream output(temporary, std::ios::trunc);
-    if (!output) {
-        error = "Cannot write settings file: " + temporary;
-        return false;
-    }
+    std::ostringstream output;
     output << "# Terminal Music Player settings\n"
            << "active_playlist=" << cleanValue(settings.activePlaylist) << '\n'
            << "playback_mode=" << cleanValue(settings.playbackMode) << '\n'
            << "last_song=" << cleanValue(settings.lastSong) << '\n'
            << "volume=" << std::fixed << std::setprecision(2)
            << std::clamp(settings.volume, 0.0F, 1.0F) << '\n';
-    output.close();
-    if (!output) {
-        error = "Failed while writing settings file: " + temporary;
-        return false;
-    }
-    std::filesystem::remove(file_, filesystemError);
-    filesystemError.clear();
-    std::filesystem::rename(temporary, file_, filesystemError);
-    if (filesystemError) {
-        error = "Cannot replace settings file: " + filesystemError.message();
-        return false;
-    }
-    return true;
+    return writer_.write(file_, output.str(), error);
 }
 
 }  // namespace music_player

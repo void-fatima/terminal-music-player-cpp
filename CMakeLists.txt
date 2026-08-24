@@ -13,10 +13,12 @@ function(music_player_warnings target_name)
 endfunction()
 
 add_library(music-player-core STATIC
+    src/AtomicFile.cpp
     src/ConfigManager.cpp
     src/DataLoader.cpp
     src/MusicLibrary.cpp
     src/Playlist.cpp
+    src/PlaylistManager.cpp
     src/Song.cpp
     src/StableId.cpp
 )
