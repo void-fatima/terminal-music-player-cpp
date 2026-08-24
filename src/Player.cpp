@@ -60,10 +60,18 @@ struct Player::Impl {
             state = PlaybackState::Stopped;
             return false;
         }
-        const auto path = queue[index].filePath().u8string();
-        const ma_result initialized = ma_sound_init_from_file(
+        ma_result initialized;
+#ifdef _WIN32
+        initialized = ma_sound_init_from_file_w(
+            &engine, queue[index].filePath().c_str(),
+            MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
+            nullptr, nullptr, &sound);
+#else
+        const auto path = queue[index].filePath().string();
+        initialized = ma_sound_init_from_file(
             &engine, path.c_str(), MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
             nullptr, nullptr, &sound);
+#endif
         if (initialized != MA_SUCCESS) {
             error = "Cannot open '" + queue[index].filePath().string() + "': "
                 + ma_result_description(initialized);
