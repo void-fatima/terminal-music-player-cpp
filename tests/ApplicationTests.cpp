@@ -1,73 +1,76 @@
 #include "Application.h"
 #include "ConfigManager.h"
 
-#include <filesystem>
-#include <fstream>
-#include <iostream>
+#include "TestSupport.h"
+
 #include <sstream>
 #include <string>
 
-namespace {
-
-int failures = 0;
-
-void expect(bool condition, const char* message) {
-    if (!condition) {
-        std::cerr << "FAIL: " << message << '\n';
-        ++failures;
-    }
-}
-
-}  // namespace
-
 int main() {
-    namespace fs = std::filesystem;
     using namespace music_player;
-
-    const auto data = fs::temp_directory_path() / "terminal-music-player-app-tests";
+    test_support::Runner test;
+    test_support::TempDirectory fixture{"application"};
+    const auto data = fixture.path();
+    test_support::writeFile(data / "music" / "first.wav", "fixture");
+    test_support::writeFile(data / "music" / "second.wav", "fixture");
+    test_support::writeFile(data / "library.csv",
+        "title,artist,album,genre,year,duration_sec,file_path\n"
+        "First Track,Example Artist,Example Album,Rock,2025,90,music/first.wav\n"
+        "Second Track,Example Artist,Example Album,Jazz,2024,80,music/second.wav\n");
     std::error_code error;
-    fs::remove_all(data, error);
-    fs::create_directories(data / "Playlists", error);
-    {
-        std::ofstream csv(data / "library.csv");
-        csv << "title,artist,album,genre,year,duration_sec,file_path\n"
-            << "First Track,Example Artist,Example Album,Rock,2025,90,music/first.wav\n";
-        std::ofstream playlist(data / "Playlists" / "favorites.m3u");
-        playlist << "../music/first.wav\n";
-    }
-
-    AppSettings initialSettings;
-    initialSettings.lastSong = (data / "music" / "first.wav").generic_string();
-    std::string settingsError;
-    expect(ConfigManager(data / "settings.cfg").save(initialSettings, settingsError),
-           "initial session is saved");
+    std::filesystem::create_directories(data / "Playlists", error);
 
     std::istringstream input{
-        "3\nb\n"
-        "1\nsort year\nfilter genre rock\nb\n"
-        "2\n1\n\n"
-        "4\nFirst\n\n"
-        "5\nvolume 40\nmode repeat-all\nb\n"
-        "h\ninvalid\nb\nq\n"};
+        "list\n"
+        "queue add 1\n"
+        "queue add 2\n"
+        "queue move 2 1\n"
+        "queue play 1\n"
+        "status\n"
+        "pause\n"
+        "status\n"
+        "volume 40\n"
+        "mode repeat-all\n"
+        "playlist create Favorites\n"
+        "playlist add 1 1\n"
+        "playlist rename 1 Focus\n"
+        "playlist list\n"
+        "search First\n"
+        "not-a-command\n"
+        "quit\n"};
     std::ostringstream output;
-    Application application{input, output, data};
-    expect(application.run() == 0, "application exits successfully");
-
+    auto lifetime = std::make_shared<test_support::FakeAudioState>();
+    Application application{input, output, data,
+                            std::make_unique<test_support::FakeAudioBackend>(lifetime)};
+    test.expect(application.run() == 0, "stream application exits successfully");
     const auto text = output.str();
-    expect(text.find("Loaded 1 songs and 1 playlists") != std::string::npos,
-           "startup reports loaded content");
-    expect(text.find("First Track") != std::string::npos, "library and search display a track");
-    expect(text.find("Queue: 1/1") != std::string::npos, "last track is restored into the queue");
-    expect(text.find("favorites") != std::string::npos, "playlist is displayed");
-    expect(text.find("Enter B to return") != std::string::npos, "help rejects invalid back commands");
-    expect(text.find("Goodbye") != std::string::npos, "application exits gracefully");
+    test.expect(text.find("Loaded 2 songs and 0 playlists") != std::string::npos,
+                "startup reports loaded content truthfully");
+    test.expect(text.find("First Track") != std::string::npos
+                    && text.find("Second Track") != std::string::npos,
+                "library, queue, and search display real track metadata");
+    test.expect(text.find("Queue 1/2") != std::string::npos,
+                "status identifies the selected queue item");
+    test.expect(text.find("State: PAUSED") != std::string::npos,
+                "stream commands drive playback state through the fake backend");
+    test.expect(text.find("Focus (1 tracks)") != std::string::npos,
+                "playlist create, add, rename, persist, and list workflow is functional");
+    test.expect(text.find("unknown command") != std::string::npos,
+                "invalid stream input produces an actionable error");
+    test.expect(lifetime->loads > 0 && lifetime->destroyed == 1,
+                "application tests use and clean up only the injected fake backend");
 
     const auto settings = ConfigManager(data / "settings.cfg").load();
-    expect(settings.activePlaylist == "favorites", "active playlist persists");
-    expect(settings.playbackMode == "REPEAT_ALL", "playback mode persists");
-    expect(settings.volume > 0.39F && settings.volume < 0.41F, "volume persists");
+    test.expect(settings.playbackMode == "REPEAT_ALL", "playback mode persists");
+    test.expect(settings.volume > 0.39F && settings.volume < 0.41F, "volume persists");
+    test.expect(settings.lastSong.find("second.wav") != std::string::npos,
+                "selected queue track persists for session restore");
 
-    fs::remove_all(data, error);
-    if (failures == 0) std::cout << "All application tests passed.\n";
-    return failures == 0 ? 0 : 1;
+    std::istringstream eofInput;
+    std::ostringstream eofOutput;
+    Application eofApplication{eofInput, eofOutput, data,
+                               std::make_unique<test_support::FakeAudioBackend>()};
+    test.expect(eofApplication.run() == 0,
+                "redirected EOF exits cleanly without blocking or requiring a command");
+    return test.finish("application");
 }

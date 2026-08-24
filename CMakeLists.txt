@@ -75,6 +75,14 @@ target_compile_features(terminal-music-player PRIVATE cxx_std_17)
 target_link_libraries(terminal-music-player PRIVATE music-player-application)
 music_player_warnings(terminal-music-player)
 
+option(MUSIC_PLAYER_BUILD_AUDIO_SMOKE_TEST
+       "Build the manual real-device miniaudio smoke-test executable" OFF)
+if(MUSIC_PLAYER_BUILD_AUDIO_SMOKE_TEST)
+    add_executable(terminal-music-player-audio-smoke tests/AudioSmoke.cpp)
+    target_link_libraries(terminal-music-player-audio-smoke PRIVATE music-player-audio)
+    music_player_warnings(terminal-music-player-audio-smoke)
+endif()
+
 if(BUILD_TESTING)
     add_executable(terminal-music-player-tests tests/CoreTests.cpp)
     target_link_libraries(terminal-music-player-tests PRIVATE music-player-core)
@@ -86,5 +94,10 @@ if(BUILD_TESTING)
     music_player_warnings(terminal-music-player-app-tests)
     add_test(NAME application-tests COMMAND terminal-music-player-app-tests)
 
-    set_tests_properties(core-tests application-tests PROPERTIES TIMEOUT 30)
+    add_executable(terminal-music-player-player-tests tests/PlayerTests.cpp)
+    target_link_libraries(terminal-music-player-player-tests PRIVATE music-player-audio)
+    music_player_warnings(terminal-music-player-player-tests)
+    add_test(NAME player-tests COMMAND terminal-music-player-player-tests)
+
+    set_tests_properties(core-tests application-tests player-tests PROPERTIES TIMEOUT 30)
 endif()
