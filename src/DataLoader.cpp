@@ -53,7 +53,7 @@ CsvRow parseCsvRow(const std::string& line) {
     bool fieldWasQuoted = false;
     bool afterQuote = false;
 
-    const auto finishField = [&]() mutable {
+    auto finishField = [&]() {
         result.fields.push_back(fieldWasQuoted ? field : trim(field));
         field.clear();
         fieldWasQuoted = false;
@@ -140,7 +140,7 @@ std::filesystem::path identityPath(const std::filesystem::path& csv,
                                    const std::filesystem::path& resolved,
                                    const std::filesystem::path& supplied) {
     const auto relative = resolved.lexically_relative(csv.parent_path());
-    if (!relative.empty() && relative.native().find("..") != 0) return relative;
+    if (!relative.empty() && relative.generic_string().rfind("..", 0) != 0) return relative;
     return supplied.lexically_normal();
 }
 
