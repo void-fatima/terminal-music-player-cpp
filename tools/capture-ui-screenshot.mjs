@@ -1,28 +1,52 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const repository = resolve(import.meta.dirname, "..");
-const executable = resolve(repository, "build/codex-debug/terminal-music-player.exe");
-const output = resolve(repository, "docs/images/terminal-music-player-actual.png");
+const defaultExecutable = process.platform === "win32"
+  ? "build/codex-debug/terminal-music-player.exe"
+  : "build/codex-debug/terminal-music-player";
+const executable = resolve(repository, process.env.MUSIC_PLAYER_EXE ?? defaultExecutable);
+const dataDirectory = resolve(repository, process.env.MUSIC_PLAYER_DATA_DIR ?? "Data");
+const output = resolve(
+  repository,
+  process.env.MUSIC_PLAYER_SCREENSHOT ?? "docs/images/terminal-music-player-actual.png",
+);
 const htmlFile = resolve(repository, "build/ui-snapshot.html");
-const edge = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
+const browserCandidates = [
+  process.env.MUSIC_PLAYER_BROWSER,
+  process.platform === "win32"
+    ? "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+    : undefined,
+  process.platform === "darwin"
+    ? "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+    : undefined,
+  "/usr/bin/microsoft-edge",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/google-chrome",
+].filter(Boolean);
+const browser = browserCandidates.find((candidate) => existsSync(candidate));
 
 if (!existsSync(executable)) {
   throw new Error(`Build the Debug executable first: ${executable}`);
 }
-if (!existsSync(edge)) {
-  throw new Error(`Microsoft Edge was not found: ${edge}`);
+if (!browser) {
+  throw new Error("No supported Chromium browser found; set MUSIC_PLAYER_BROWSER.");
 }
 
+const runtimeDirectories = [process.env.MUSIC_PLAYER_RUNTIME_BIN];
+if (process.platform === "win32" && existsSync("C:/msys64/ucrt64/bin")) {
+  runtimeDirectories.push("C:/msys64/ucrt64/bin");
+}
 const environment = {
   ...process.env,
-  PATH: `C:/msys64/ucrt64/bin;${process.env.PATH ?? ""}`,
+  PATH: [...runtimeDirectories.filter(Boolean), process.env.PATH ?? ""].join(delimiter),
 };
 const captured = spawnSync(
   executable,
-  ["--snapshot", "--data-dir", resolve(repository, "Data")],
+  ["--snapshot", "--data-dir", dataDirectory],
   { cwd: repository, encoding: "utf8", env: environment },
 );
 if (captured.status !== 0) {
@@ -80,7 +104,7 @@ const document = `<!doctype html>
 
 mkdirSync(dirname(output), { recursive: true });
 writeFileSync(htmlFile, document, "utf8");
-const rendered = spawnSync(edge, [
+const rendered = spawnSync(browser, [
   "--headless=new",
   "--disable-gpu",
   "--hide-scrollbars",
