@@ -5,6 +5,8 @@ include(CTest)
 include(FetchContent)
 find_package(Threads REQUIRED)
 
+option(MUSIC_PLAYER_WARNINGS_AS_ERRORS "Treat first-party compiler warnings as errors" OFF)
+
 # FTXUI 7.0.1 is pinned for reproducible, cross-platform raw keyboard input,
 # resize-aware layout, Unicode cell measurement, and NO_COLOR support.
 set(FTXUI_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -22,8 +24,14 @@ FetchContent_MakeAvailable(ftxui)
 function(music_player_warnings target_name)
     if(MSVC)
         target_compile_options(${target_name} PRIVATE /W4 /permissive-)
+        if(MUSIC_PLAYER_WARNINGS_AS_ERRORS)
+            target_compile_options(${target_name} PRIVATE /WX)
+        endif()
     else()
         target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
+        if(MUSIC_PLAYER_WARNINGS_AS_ERRORS)
+            target_compile_options(${target_name} PRIVATE -Werror)
+        endif()
     endif()
 endfunction()
 

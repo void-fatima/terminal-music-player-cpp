@@ -49,7 +49,7 @@ public:
         std::error_code filesystemError;
         std::filesystem::create_directories(parent, filesystemError);
         if (filesystemError) {
-            error = "Cannot create settings directory '" + parent.string()
+            error = "Cannot create parent directory '" + parent.string()
                 + "': " + filesystemError.message();
             return false;
         }
@@ -72,7 +72,7 @@ public:
             if (file == INVALID_HANDLE_VALUE) {
                 const DWORD code = GetLastError();
                 if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS) continue;
-                error = "Cannot open temporary settings file '" + temporary.string()
+                error = "Cannot open temporary file '" + temporary.string()
                     + "': " + nativeError(code);
                 return false;
             }
@@ -84,7 +84,7 @@ public:
                 DWORD written = 0;
                 if (!WriteFile(file, contents.data() + offset, chunk, &written, nullptr)
                     || written != chunk) {
-                    error = "Failed while writing temporary settings file: "
+                    error = "Failed while writing temporary file: "
                         + nativeError(GetLastError());
                     success = false;
                     break;
@@ -92,11 +92,11 @@ public:
                 offset += written;
             }
             if (success && !FlushFileBuffers(file)) {
-                error = "Cannot flush temporary settings file: " + nativeError(GetLastError());
+                error = "Cannot flush temporary file: " + nativeError(GetLastError());
                 success = false;
             }
             if (!CloseHandle(file)) {
-                if (success) error = "Cannot close temporary settings file: " + nativeError(GetLastError());
+                if (success) error = "Cannot close temporary file: " + nativeError(GetLastError());
                 success = false;
             }
             if (!success) {
@@ -107,7 +107,7 @@ public:
             const int descriptor = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
             if (descriptor < 0) {
                 if (errno == EEXIST) continue;
-                error = "Cannot open temporary settings file '" + temporary.string()
+                error = "Cannot open temporary file '" + temporary.string()
                     + "': " + nativeError(0);
                 return false;
             }
@@ -118,18 +118,18 @@ public:
                                              contents.size() - offset);
                 if (written < 0) {
                     if (errno == EINTR) continue;
-                    error = "Failed while writing temporary settings file: " + nativeError(0);
+                    error = "Failed while writing temporary file: " + nativeError(0);
                     success = false;
                     break;
                 }
                 offset += static_cast<std::size_t>(written);
             }
             if (success && ::fsync(descriptor) != 0) {
-                error = "Cannot flush temporary settings file: " + nativeError(0);
+                error = "Cannot flush temporary file: " + nativeError(0);
                 success = false;
             }
             if (::close(descriptor) != 0) {
-                if (success) error = "Cannot close temporary settings file: " + nativeError(0);
+                if (success) error = "Cannot close temporary file: " + nativeError(0);
                 success = false;
             }
             if (!success) {
@@ -139,7 +139,7 @@ public:
 #endif
             return true;
         }
-        error = "Cannot allocate a unique temporary settings filename.";
+        error = "Cannot allocate a unique temporary filename.";
         return false;
     }
 

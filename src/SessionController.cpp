@@ -197,6 +197,7 @@ bool SessionController::saveSettings() {
     if (!loaded_) return true;
     settings_.playbackMode = Player::modeName(player_.mode());
     settings_.volume = player_.volume();
+    if (activePlaylist_ && *activePlaylist_ >= playlists().size()) activePlaylist_.reset();
     settings_.activePlaylist = activePlaylist_ ? playlists()[*activePlaylist_].name() : "";
     if (const Song* song = player_.currentSong()) {
         settings_.lastSong = song->filePath().generic_string();

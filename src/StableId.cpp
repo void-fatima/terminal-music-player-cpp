@@ -25,7 +25,7 @@ std::string normalizeIdentityPath(const std::filesystem::path& path) {
     return foldAscii(std::move(normalized));
 }
 
-Song::Id stableSongId(const std::filesystem::path& identityPath) noexcept {
+Song::Id stableSongId(const std::filesystem::path& identityPath) {
     // FNV-1a 64 is explicitly specified here rather than relying on
     // implementation-defined std::hash output.
     constexpr Song::Id offset = 14695981039346656037ULL;
