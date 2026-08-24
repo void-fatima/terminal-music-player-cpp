@@ -2,7 +2,22 @@ cmake_minimum_required(VERSION 3.16)
 project(terminal_music_player VERSION 1.0.0 LANGUAGES CXX)
 
 include(CTest)
+include(FetchContent)
 find_package(Threads REQUIRED)
+
+# FTXUI 7.0.1 is pinned for reproducible, cross-platform raw keyboard input,
+# resize-aware layout, Unicode cell measurement, and NO_COLOR support.
+set(FTXUI_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_MODULES OFF CACHE BOOL "" FORCE)
+set(FTXUI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(FTXUI_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(ftxui
+    GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
+    GIT_TAG v7.0.1
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(ftxui)
 
 function(music_player_warnings target_name)
     if(MSVC)
@@ -16,8 +31,10 @@ add_library(music-player-core STATIC
     src/AtomicFile.cpp
     src/ConfigManager.cpp
     src/DataLoader.cpp
+    src/CliOptions.cpp
     src/InputMapping.cpp
     src/MusicLibrary.cpp
+    src/PathUtils.cpp
     src/Playlist.cpp
     src/PlaylistManager.cpp
     src/Song.cpp
@@ -46,10 +63,11 @@ add_library(music-player-application STATIC
     src/Application.cpp
     src/SessionController.cpp
     src/StreamUi.cpp
+    src/TerminalUi.cpp
 )
 target_include_directories(music-player-application PUBLIC src)
 target_compile_features(music-player-application PUBLIC cxx_std_17)
-target_link_libraries(music-player-application PUBLIC music-player-core music-player-audio)
+target_link_libraries(music-player-application PUBLIC music-player-core music-player-audio ftxui::ftxui)
 music_player_warnings(music-player-application)
 
 add_executable(terminal-music-player src/main.cpp)
@@ -67,4 +85,6 @@ if(BUILD_TESTING)
     target_link_libraries(terminal-music-player-app-tests PRIVATE music-player-application)
     music_player_warnings(terminal-music-player-app-tests)
     add_test(NAME application-tests COMMAND terminal-music-player-app-tests)
+
+    set_tests_properties(core-tests application-tests PROPERTIES TIMEOUT 30)
 endif()

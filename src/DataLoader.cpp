@@ -1,5 +1,6 @@
 #include "DataLoader.h"
 
+#include "PathUtils.h"
 #include "StableId.h"
 
 #include <algorithm>
@@ -243,7 +244,7 @@ LoadReport CsvLoader::load(const std::filesystem::path& file, MusicLibrary& libr
             continue;
         }
 
-        const std::filesystem::path supplied = std::filesystem::u8path(row.fields[6]);
+        const std::filesystem::path supplied = pathFromUtf8(row.fields[6]);
         const auto resolved = resolveLibraryPath(file, supplied);
         const auto identity = normalizeIdentityPath(identityPath(file, resolved, supplied));
         if (identity.empty()) {
@@ -348,7 +349,7 @@ LoadReport M3uLoader::loadDirectory(const std::filesystem::path& directory,
             }
             line = trim(line);
             if (line.empty() || line.front() == '#') continue;
-            const auto resolved = resolvePlaylistPath(file, std::filesystem::u8path(line));
+            const auto resolved = resolvePlaylistPath(file, pathFromUtf8(line));
             const auto song = library.findByPath(resolved);
             if (!song) {
                 report.warnings.push_back(file.filename().string() + " line "
