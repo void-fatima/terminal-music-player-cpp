@@ -98,6 +98,17 @@ void Application::loadData() {
             break;
         }
     }
+
+    if (!settings_.lastSong.empty()) {
+        std::vector<Song> queue = library_.songs();
+        const auto restored = std::find_if(queue.begin(), queue.end(), [this](const Song& song) {
+            return song.filePath().generic_string() == settings_.lastSong;
+        });
+        if (restored != queue.end()) {
+            const auto restoredIndex = static_cast<std::size_t>(restored - queue.begin());
+            player_.prepare(std::move(queue), restoredIndex);
+        }
+    }
 }
 
 void Application::saveSettings() {

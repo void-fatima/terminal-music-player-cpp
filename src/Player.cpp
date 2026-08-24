@@ -117,18 +117,29 @@ struct Player::Impl {
 Player::Player() : impl_(std::make_unique<Impl>()) {}
 Player::~Player() = default;
 
-bool Player::play(std::vector<Song> queue, std::size_t startIndex) {
+bool Player::prepare(std::vector<Song> queue, std::size_t startIndex) {
     if (queue.empty() || startIndex >= queue.size()) {
         impl_->error = "Select a valid song before playing.";
         return false;
     }
+    impl_->unload();
     impl_->queue = std::move(queue);
     impl_->index = startIndex;
+    impl_->state = PlaybackState::Stopped;
+    impl_->error.clear();
+    return true;
+}
+
+bool Player::play(std::vector<Song> queue, std::size_t startIndex) {
+    if (!prepare(std::move(queue), startIndex)) return false;
     return impl_->startCurrent();
 }
 
 bool Player::togglePause() {
     if (!impl_->soundInitialized) {
+        if (impl_->state == PlaybackState::Stopped && !impl_->queue.empty()) {
+            return impl_->startCurrent();
+        }
         impl_->error = "Nothing is loaded.";
         return false;
     }

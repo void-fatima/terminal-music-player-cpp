@@ -36,7 +36,14 @@ int main() {
         playlist << "../music/first.wav\n";
     }
 
+    AppSettings initialSettings;
+    initialSettings.lastSong = (data / "music" / "first.wav").generic_string();
+    std::string settingsError;
+    expect(ConfigManager(data / "settings.cfg").save(initialSettings, settingsError),
+           "initial session is saved");
+
     std::istringstream input{
+        "3\nb\n"
         "1\nsort year\nfilter genre rock\nb\n"
         "2\n1\n\n"
         "4\nFirst\n\n"
@@ -50,6 +57,7 @@ int main() {
     expect(text.find("Loaded 1 songs and 1 playlists") != std::string::npos,
            "startup reports loaded content");
     expect(text.find("First Track") != std::string::npos, "library and search display a track");
+    expect(text.find("Queue: 1/1") != std::string::npos, "last track is restored into the queue");
     expect(text.find("favorites") != std::string::npos, "playlist is displayed");
     expect(text.find("Enter B to return") != std::string::npos, "help rejects invalid back commands");
     expect(text.find("Goodbye") != std::string::npos, "application exits gracefully");

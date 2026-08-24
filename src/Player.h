@@ -19,6 +19,7 @@ public:
     Player(const Player&) = delete;
     Player& operator=(const Player&) = delete;
 
+    bool prepare(std::vector<Song> queue, std::size_t startIndex = 0);
     bool play(std::vector<Song> queue, std::size_t startIndex = 0);
     bool togglePause();
     void stop();
