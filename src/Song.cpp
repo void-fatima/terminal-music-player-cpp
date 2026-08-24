@@ -10,14 +10,16 @@ Song::Song(Id id,
            std::string album,
            std::string genre,
            std::filesystem::path filePath,
-           Duration duration)
+           Duration duration,
+           int year)
     : id_(id),
       title_(std::move(title)),
       artist_(std::move(artist)),
       album_(std::move(album)),
       genre_(std::move(genre)),
       filePath_(std::move(filePath)),
-      duration_(duration) {}
+      duration_(duration),
+      year_(year) {}
 
 Song::Id Song::id() const noexcept {
     return id_;
@@ -45,6 +47,10 @@ const std::filesystem::path& Song::filePath() const noexcept {
 
 Song::Duration Song::duration() const noexcept {
     return duration_;
+}
+
+int Song::year() const noexcept {
+    return year_;
 }
 
 }  // namespace music_player

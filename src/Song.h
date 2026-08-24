@@ -18,7 +18,8 @@ public:
          std::string album,
          std::string genre,
          std::filesystem::path filePath,
-         Duration duration);
+         Duration duration,
+         int year = 0);
 
     Id id() const noexcept;
     const std::string& title() const noexcept;
@@ -27,6 +28,7 @@ public:
     const std::string& genre() const noexcept;
     const std::filesystem::path& filePath() const noexcept;
     Duration duration() const noexcept;
+    int year() const noexcept;
 
 private:
     Id id_;
@@ -36,6 +38,7 @@ private:
     std::string genre_;
     std::filesystem::path filePath_;
     Duration duration_;
+    int year_;
 };
 
 }  // namespace music_player

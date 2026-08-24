@@ -21,10 +21,17 @@ public:
     SearchResults searchByTitle(std::string_view query) const;
     SearchResults searchByArtist(std::string_view query) const;
     SearchResults searchByAlbum(std::string_view query) const;
+    SearchResults search(std::string_view query) const;
+    SearchResults filterByArtist(std::string_view artist) const;
+    SearchResults filterByAlbum(std::string_view album) const;
     SearchResults filterByGenre(std::string_view genre) const;
 
     void sortByTitle();
     void sortByArtist();
+    void sortByAlbum();
+    void sortByYear();
+    void sortByDuration();
+    void clear() noexcept;
 
 private:
     std::vector<Song> songs_;

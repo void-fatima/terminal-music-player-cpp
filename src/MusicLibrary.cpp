@@ -86,6 +86,38 @@ MusicLibrary::SearchResults MusicLibrary::searchByAlbum(std::string_view query) 
     });
 }
 
+MusicLibrary::SearchResults MusicLibrary::search(std::string_view query) const {
+    SearchResults results;
+    for (const Song& song : songs_) {
+        if (containsCaseInsensitive(song.title(), query)
+            || containsCaseInsensitive(song.artist(), query)
+            || containsCaseInsensitive(song.album(), query)) {
+            results.emplace_back(song);
+        }
+    }
+    return results;
+}
+
+MusicLibrary::SearchResults MusicLibrary::filterByArtist(std::string_view artist) const {
+    MusicLibrary::SearchResults results;
+    for (const Song& song : songs_) {
+        if (equalsCaseInsensitive(song.artist(), artist)) {
+            results.emplace_back(song);
+        }
+    }
+    return results;
+}
+
+MusicLibrary::SearchResults MusicLibrary::filterByAlbum(std::string_view album) const {
+    MusicLibrary::SearchResults results;
+    for (const Song& song : songs_) {
+        if (equalsCaseInsensitive(song.album(), album)) {
+            results.emplace_back(song);
+        }
+    }
+    return results;
+}
+
 MusicLibrary::SearchResults MusicLibrary::filterByGenre(std::string_view genre) const {
     MusicLibrary::SearchResults results;
     for (const Song& song : songs_) {
@@ -106,6 +138,28 @@ void MusicLibrary::sortByArtist() {
     std::stable_sort(songs_.begin(), songs_.end(), [](const Song& left, const Song& right) {
         return lessCaseInsensitive(left.artist(), right.artist());
     });
+}
+
+void MusicLibrary::sortByAlbum() {
+    std::stable_sort(songs_.begin(), songs_.end(), [](const Song& left, const Song& right) {
+        return lessCaseInsensitive(left.album(), right.album());
+    });
+}
+
+void MusicLibrary::sortByYear() {
+    std::stable_sort(songs_.begin(), songs_.end(), [](const Song& left, const Song& right) {
+        return left.year() < right.year();
+    });
+}
+
+void MusicLibrary::sortByDuration() {
+    std::stable_sort(songs_.begin(), songs_.end(), [](const Song& left, const Song& right) {
+        return left.duration() < right.duration();
+    });
+}
+
+void MusicLibrary::clear() noexcept {
+    songs_.clear();
 }
 
 }  // namespace music_player
