@@ -315,9 +315,16 @@ void Application::dispatchMainMenu(const std::string& command) {
 }
 
 void Application::waitForBack() {
-    const auto command = prompt("[B] Back > ");
-    if (!command) currentScreen_ = Screen::Exit;
-    else currentScreen_ = Screen::MainMenu;
+    while (true) {
+        const auto command = prompt("[B] Back > ");
+        if (!command) { currentScreen_ = Screen::Exit; return; }
+        const auto normalized = normalize(*command);
+        if (normalized.empty() || normalized == "b" || normalized == "back") {
+            currentScreen_ = Screen::MainMenu;
+            return;
+        }
+        output_ << "Enter B to return to the main menu.\n";
+    }
 }
 
 Application::SongView Application::allSongs() const {
