@@ -97,7 +97,7 @@ public:
                 return true;
             }
             if (event == Event::F1) { helpVisible = true; return true; }
-            return false;
+            return searchInput->OnEvent(event);
         }
 
         if (event == Event::Character("q")) { terminal.ExitLoopClosure()(); return true; }
@@ -332,7 +332,7 @@ private:
 
     bool editorEvent(const Event& event) {
         if (event == Event::Escape) { editAction = EditAction::None; editText.clear(); return true; }
-        if (event != Event::Return) return false;
+        if (event != Event::Return) return editor->OnEvent(event);
         std::string error;
         bool success = false;
         if (editAction == EditAction::CreatePlaylist) {
