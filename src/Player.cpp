@@ -99,6 +99,7 @@ struct Player::Impl {
         } else {
             unload();
             state = PlaybackState::Stopped;
+            error.clear();
             return false;
         }
         return startCurrent();
