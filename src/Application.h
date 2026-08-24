@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MusicLibrary.h"
+
 #include <iosfwd>
 #include <string>
 
@@ -34,6 +36,7 @@ private:
 
     std::istream& input_;
     std::ostream& output_;
+    MusicLibrary library_;
     Screen currentScreen_{Screen::MainMenu};
 };
 
