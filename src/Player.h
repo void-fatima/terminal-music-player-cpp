@@ -1,5 +1,6 @@
 #pragma once
 
+#include "IAudioBackend.h"
 #include "Song.h"
 
 #include <cstddef>
@@ -14,7 +15,7 @@ enum class PlaybackState { Stopped, Playing, Paused };
 
 class Player {
 public:
-    Player();
+    explicit Player(std::unique_ptr<IAudioBackend> backend = {});
     ~Player();
     Player(const Player&) = delete;
     Player& operator=(const Player&) = delete;
@@ -22,15 +23,21 @@ public:
     bool prepare(std::vector<Song> queue, std::size_t startIndex = 0);
     bool play(std::vector<Song> queue, std::size_t startIndex = 0);
     bool togglePause();
-    void stop();
+    bool stop();
     bool next();
     bool previous();
     bool seekBy(double seconds);
-    void update();
+    bool update();
+
+    bool playAt(std::size_t index);
+    bool enqueue(Song song);
+    bool removeFromQueue(std::size_t index);
+    bool moveInQueue(std::size_t from, std::size_t to);
+    void clearQueue();
 
     void setMode(PlaybackMode mode) noexcept;
     PlaybackMode mode() const noexcept;
-    void setVolume(float volume) noexcept;
+    bool setVolume(float volume);
     float volume() const noexcept;
 
     PlaybackState state() const noexcept;
@@ -41,6 +48,7 @@ public:
     double durationSeconds() const noexcept;
     bool audioAvailable() const noexcept;
     const std::string& lastError() const noexcept;
+    const std::vector<std::size_t>& shuffleHistory() const noexcept;
 
     static const char* modeName(PlaybackMode mode) noexcept;
     static PlaybackMode parseMode(const std::string& value) noexcept;

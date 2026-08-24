@@ -1,63 +1,55 @@
 cmake_minimum_required(VERSION 3.16)
-project(terminal_music_player LANGUAGES CXX)
+project(terminal_music_player VERSION 1.0.0 LANGUAGES CXX)
 
-add_executable(terminal-music-player
-    src/main.cpp
-    src/Application.cpp
-    src/ConfigManager.cpp
-    src/DataLoader.cpp
-    src/MusicLibrary.cpp
-    src/Player.cpp
-    src/Playlist.cpp
-    src/Song.cpp
-)
-
-target_compile_features(terminal-music-player PRIVATE cxx_std_17)
+include(CTest)
 find_package(Threads REQUIRED)
 
-function(configure_audio_target target_name)
-    target_link_libraries(${target_name} PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
-    if(WIN32)
-        target_link_libraries(${target_name} PRIVATE ole32 winmm uuid avrt)
-    elseif(UNIX AND NOT APPLE)
-        target_link_libraries(${target_name} PRIVATE m)
+function(music_player_warnings target_name)
+    if(MSVC)
+        target_compile_options(${target_name} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endfunction()
 
-configure_audio_target(terminal-music-player)
+add_library(music-player-core STATIC
+    src/ConfigManager.cpp
+    src/DataLoader.cpp
+    src/MusicLibrary.cpp
+    src/Playlist.cpp
+    src/Song.cpp
+)
+target_include_directories(music-player-core PUBLIC src)
+target_compile_features(music-player-core PUBLIC cxx_std_17)
+music_player_warnings(music-player-core)
 
-if(MSVC)
-    target_compile_options(terminal-music-player PRIVATE /W4 /permissive-)
-else()
-    target_compile_options(terminal-music-player PRIVATE -Wall -Wextra -Wpedantic)
+add_library(music-player-audio STATIC
+    src/MiniaudioBackend.cpp
+    src/Player.cpp
+)
+target_include_directories(music-player-audio PUBLIC src PRIVATE third_party/miniaudio)
+target_compile_features(music-player-audio PUBLIC cxx_std_17)
+target_link_libraries(music-player-audio PUBLIC music-player-core PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+if(WIN32)
+    target_link_libraries(music-player-audio PRIVATE ole32 winmm uuid avrt)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(music-player-audio PRIVATE m)
 endif()
+music_player_warnings(music-player-audio)
 
-include(CTest)
+add_executable(terminal-music-player src/main.cpp src/Application.cpp)
+target_compile_features(terminal-music-player PRIVATE cxx_std_17)
+target_link_libraries(terminal-music-player PRIVATE music-player-core music-player-audio)
+music_player_warnings(terminal-music-player)
+
 if(BUILD_TESTING)
-    add_executable(terminal-music-player-tests
-        tests/CoreTests.cpp
-        src/ConfigManager.cpp
-        src/DataLoader.cpp
-        src/MusicLibrary.cpp
-        src/Playlist.cpp
-        src/Song.cpp
-    )
-    target_include_directories(terminal-music-player-tests PRIVATE src)
-    target_compile_features(terminal-music-player-tests PRIVATE cxx_std_17)
+    add_executable(terminal-music-player-tests tests/CoreTests.cpp)
+    target_link_libraries(terminal-music-player-tests PRIVATE music-player-core)
+    music_player_warnings(terminal-music-player-tests)
     add_test(NAME core-tests COMMAND terminal-music-player-tests)
 
-    add_executable(terminal-music-player-app-tests
-        tests/ApplicationTests.cpp
-        src/Application.cpp
-        src/ConfigManager.cpp
-        src/DataLoader.cpp
-        src/MusicLibrary.cpp
-        src/Player.cpp
-        src/Playlist.cpp
-        src/Song.cpp
-    )
-    target_include_directories(terminal-music-player-app-tests PRIVATE src)
-    target_compile_features(terminal-music-player-app-tests PRIVATE cxx_std_17)
-    configure_audio_target(terminal-music-player-app-tests)
+    add_executable(terminal-music-player-app-tests tests/ApplicationTests.cpp)
+    target_link_libraries(terminal-music-player-app-tests PRIVATE music-player-core music-player-audio)
+    music_player_warnings(terminal-music-player-app-tests)
     add_test(NAME application-tests COMMAND terminal-music-player-app-tests)
 endif()
