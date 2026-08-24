@@ -1,5 +1,10 @@
 # Day 1 — Project Setup & UX Flow
 
+> **Historical document / Concept Flow:** Archived after the production-hardening pass. The current
+> implemented interface, controls, ownership, and test guarantees are documented in the repository
+> README and `docs/CORE_ARCHITECTURE.md`. Paths and shell behavior below describe the original Day 1
+> line-interface concept and are not current product instructions.
+
 Owner: Setayesh  
 Duration: 1 day
 
