@@ -1,15 +1,22 @@
 #include "DataLoader.h"
 
+#include "StableId.h"
+
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cctype>
+#include <ctime>
 #include <fstream>
-#include <sstream>
 #include <system_error>
 #include <unordered_map>
 
 namespace music_player {
 namespace {
+
+constexpr std::size_t maxRecordBytes = 1024U * 1024U;
+constexpr std::array<const char*, 7> requiredHeader{
+    "title", "artist", "album", "genre", "year", "duration_sec", "file_path"};
 
 std::string trim(std::string value) {
     const auto first = value.find_first_not_of(" \t\r\n");
@@ -18,34 +25,85 @@ std::string trim(std::string value) {
     return value.substr(first, last - first + 1);
 }
 
-std::vector<std::string> parseCsvRow(const std::string& line, bool& valid) {
+std::string lowerAscii(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+    });
+    return value;
+}
+
+void removeBom(std::string& value) {
+    if (value.size() >= 3
+        && static_cast<unsigned char>(value[0]) == 0xEF
+        && static_cast<unsigned char>(value[1]) == 0xBB
+        && static_cast<unsigned char>(value[2]) == 0xBF) {
+        value.erase(0, 3);
+    }
+}
+
+struct CsvRow {
     std::vector<std::string> fields;
+    std::string error;
+};
+
+CsvRow parseCsvRow(const std::string& line) {
+    CsvRow result;
     std::string field;
     bool quoted = false;
-    valid = true;
-    for (std::size_t i = 0; i < line.size(); ++i) {
-        const char c = line[i];
+    bool fieldWasQuoted = false;
+    bool afterQuote = false;
+
+    const auto finishField = [&]() mutable {
+        result.fields.push_back(fieldWasQuoted ? field : trim(field));
+        field.clear();
+        fieldWasQuoted = false;
+        afterQuote = false;
+    };
+
+    for (std::size_t index = 0; index < line.size(); ++index) {
+        const char character = line[index];
         if (quoted) {
-            if (c == '"' && i + 1 < line.size() && line[i + 1] == '"') {
-                field.push_back('"');
-                ++i;
-            } else if (c == '"') {
-                quoted = false;
+            if (character == '"') {
+                if (index + 1 < line.size() && line[index + 1] == '"') {
+                    field.push_back('"');
+                    ++index;
+                } else {
+                    quoted = false;
+                    afterQuote = true;
+                }
             } else {
-                field.push_back(c);
+                field.push_back(character);
             }
-        } else if (c == ',') {
-            fields.push_back(trim(field));
-            field.clear();
-        } else if (c == '"' && field.empty()) {
+            continue;
+        }
+
+        if (afterQuote) {
+            if (character == ',') {
+                finishField();
+            } else {
+                result.error = "unexpected text after a closing quote";
+                return result;
+            }
+        } else if (character == ',') {
+            finishField();
+        } else if (character == '"') {
+            if (!field.empty()) {
+                result.error = "quote in an unquoted field";
+                return result;
+            }
             quoted = true;
+            fieldWasQuoted = true;
         } else {
-            field.push_back(c);
+            field.push_back(character);
         }
     }
-    if (quoted) valid = false;
-    fields.push_back(trim(field));
-    return fields;
+
+    if (quoted) {
+        result.error = "unterminated quoted field";
+        return result;
+    }
+    finishField();
+    return result;
 }
 
 bool parseInt(const std::string& value, int& result) {
@@ -55,74 +113,178 @@ bool parseInt(const std::string& value, int& result) {
     return parsed.ec == std::errc{} && parsed.ptr == end;
 }
 
-std::string pathKey(const std::filesystem::path& path) {
-    std::error_code error;
-    auto normalized = std::filesystem::weakly_canonical(path, error);
-    if (error) normalized = path.lexically_normal();
-    auto key = normalized.generic_string();
+int currentYear() {
+    const std::time_t now = std::time(nullptr);
+    std::tm calendar{};
 #ifdef _WIN32
-    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    if (localtime_s(&calendar, &now) != 0) return 2100;
+#else
+    if (localtime_r(&now, &calendar) == nullptr) return 2100;
 #endif
-    return key;
+    return calendar.tm_year + 1900;
+}
+
+std::filesystem::path resolveLibraryPath(const std::filesystem::path& csv,
+                                         const std::filesystem::path& supplied) {
+    if (supplied.is_absolute()) return supplied.lexically_normal();
+    const auto dataRoot = csv.parent_path();
+    const auto first = supplied.begin();
+    if (first != supplied.end()
+        && lowerAscii(first->string()) == lowerAscii(dataRoot.filename().string())) {
+        return (dataRoot.parent_path() / supplied).lexically_normal();
+    }
+    return (dataRoot / supplied).lexically_normal();
+}
+
+std::filesystem::path identityPath(const std::filesystem::path& csv,
+                                   const std::filesystem::path& resolved,
+                                   const std::filesystem::path& supplied) {
+    const auto relative = resolved.lexically_relative(csv.parent_path());
+    if (!relative.empty() && relative.native().find("..") != 0) return relative;
+    return supplied.lexically_normal();
+}
+
+std::filesystem::path resolvePlaylistPath(const std::filesystem::path& playlist,
+                                          const std::filesystem::path& supplied) {
+    if (supplied.is_absolute()) return supplied.lexically_normal();
+    const auto playlistsDirectory = playlist.parent_path();
+    const auto dataRoot = playlistsDirectory.parent_path();
+    const auto first = supplied.begin();
+    if (first != supplied.end()
+        && lowerAscii(first->string()) == lowerAscii(dataRoot.filename().string())) {
+        return (dataRoot.parent_path() / supplied).lexically_normal();
+    }
+    return (playlistsDirectory / supplied).lexically_normal();
+}
+
+bool supportedPlaylistExtension(const std::filesystem::path& file) {
+    const auto extension = lowerAscii(file.extension().string());
+    return extension == ".m3u" || extension == ".m3u8";
 }
 
 }  // namespace
 
 LoadReport CsvLoader::load(const std::filesystem::path& file, MusicLibrary& library) {
     LoadReport report;
-    std::ifstream input(file);
+    std::ifstream input(file, std::ios::binary);
     if (!input) {
         report.warnings.push_back("Cannot open library file: " + file.string());
         return report;
     }
 
     std::string line;
-    std::size_t lineNumber = 0;
-    if (std::getline(input, line)) {
-        ++lineNumber;
-        if (line.size() >= 3 && static_cast<unsigned char>(line[0]) == 0xEF
-            && static_cast<unsigned char>(line[1]) == 0xBB
-            && static_cast<unsigned char>(line[2]) == 0xBF) {
-            line.erase(0, 3);
+    if (!std::getline(input, line)) {
+        report.warnings.push_back("CSV line 1: required header is missing");
+        return report;
+    }
+    removeBom(line);
+    auto header = parseCsvRow(line);
+    if (!header.error.empty() || header.fields.size() != requiredHeader.size()) {
+        report.warnings.push_back("CSV line 1: invalid header; expected exactly "
+                                  "title,artist,album,genre,year,duration_sec,file_path");
+        return report;
+    }
+    for (std::size_t column = 0; column < requiredHeader.size(); ++column) {
+        if (header.fields[column] != requiredHeader[column]) {
+            report.warnings.push_back("CSV line 1: invalid header column "
+                                      + std::to_string(column + 1) + "; expected '"
+                                      + requiredHeader[column] + "'");
+            return report;
         }
     }
 
-    Song::Id nextId = 1;
+    std::unordered_map<std::string, std::size_t> seenPaths;
+    std::unordered_map<Song::Id, std::string> seenIds;
+    std::size_t lineNumber = 1;
     while (std::getline(input, line)) {
         ++lineNumber;
-        if (trim(line).empty()) continue;
-        bool valid = false;
-        auto fields = parseCsvRow(line, valid);
-        if (!valid || fields.size() != 7) {
-            report.warnings.push_back("CSV line " + std::to_string(lineNumber) + ": expected 7 fields");
+        if (line.size() > maxRecordBytes) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": record exceeds the 1 MiB safety limit");
             continue;
         }
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (trim(line).empty()) continue;
+
+        auto row = parseCsvRow(line);
+        if (!row.error.empty()) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber) + ": " + row.error);
+            continue;
+        }
+        if (row.fields.size() != requiredHeader.size()) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": expected exactly 7 fields, got "
+                                      + std::to_string(row.fields.size()));
+            continue;
+        }
+
         int year = 0;
         int seconds = 0;
-        if (!parseInt(fields[4], year) || year < 0 || !parseInt(fields[5], seconds) || seconds < 0) {
-            report.warnings.push_back("CSV line " + std::to_string(lineNumber) + ": invalid year or duration");
+        const int maximumYear = currentYear() + 1;
+        if (!parseInt(row.fields[4], year) || (year != 0 && (year < 1000 || year > maximumYear))) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": year must be 0 or between 1000 and "
+                                      + std::to_string(maximumYear));
             continue;
         }
-        if (fields[0].empty() || fields[6].empty()) {
-            report.warnings.push_back("CSV line " + std::to_string(lineNumber) + ": title and file path are required");
+        if (!parseInt(row.fields[5], seconds) || seconds <= 0 || seconds > 86400) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": duration_sec must be between 1 and 86400");
             continue;
         }
-        std::filesystem::path audioPath = fields[6];
-        if (audioPath.is_relative()) {
-            const auto dataRoot = file.parent_path();
-            const auto first = audioPath.begin();
-            if (first != audioPath.end() && first->string() == dataRoot.filename().string()) {
-                audioPath = dataRoot.parent_path() / audioPath;
-            } else {
-                audioPath = dataRoot / audioPath;
-            }
+        if (row.fields[0].empty()) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": title is required");
+            continue;
         }
-        library.addSong(Song{nextId++, fields[0], fields[1], fields[2], fields[3], audioPath,
-                             Song::Duration{seconds * 1000LL}, year});
+        if (row.fields[6].empty()) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": file_path is required");
+            continue;
+        }
+
+        const std::filesystem::path supplied = std::filesystem::u8path(row.fields[6]);
+        const auto resolved = resolveLibraryPath(file, supplied);
+        const auto identity = normalizeIdentityPath(identityPath(file, resolved, supplied));
+        if (identity.empty()) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": file_path does not identify a file");
+            continue;
+        }
+        const auto priorPath = seenPaths.find(identity);
+        if (priorPath != seenPaths.end()) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": duplicate normalized path from line "
+                                      + std::to_string(priorPath->second));
+            continue;
+        }
+        const Song::Id id = stableSongId(identity);
+        const auto priorId = seenIds.find(id);
+        if (priorId != seenIds.end() && priorId->second != identity) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": stable ID collision with '" + priorId->second + "'");
+            continue;
+        }
+
+        Song song{id, row.fields[0], row.fields[1], row.fields[2], row.fields[3], resolved,
+                  Song::Duration{static_cast<long long>(seconds) * 1000LL}, year};
+        if (!library.addSong(std::move(song))) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": duplicate song ID or resolved file path");
+            continue;
+        }
+        seenPaths.emplace(identity, lineNumber);
+        seenIds.emplace(id, identity);
         ++report.loaded;
+
+        std::error_code fileError;
+        if (!std::filesystem::is_regular_file(resolved, fileError)) {
+            report.warnings.push_back("CSV line " + std::to_string(lineNumber)
+                                      + ": audio file is missing or unreadable: "
+                                      + resolved.string());
+        }
     }
+    if (input.bad()) report.warnings.push_back("I/O error while reading library file: " + file.string());
     return report;
 }
 
@@ -133,21 +295,39 @@ LoadReport M3uLoader::loadDirectory(const std::filesystem::path& directory,
     playlists.clear();
     std::error_code error;
     if (!std::filesystem::is_directory(directory, error)) {
-        report.warnings.push_back("Cannot open playlist directory: " + directory.string());
+        report.warnings.push_back("Cannot open playlist directory: " + directory.string()
+                                  + (error ? " (" + error.message() + ")" : ""));
         return report;
     }
 
-    std::unordered_map<std::string, Song::Id> songsByPath;
-    for (const auto& song : library.songs()) songsByPath[pathKey(song.filePath())] = song.id();
-
     std::vector<std::filesystem::path> files;
-    for (const auto& entry : std::filesystem::directory_iterator(directory, error)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".m3u") files.push_back(entry.path());
+    std::filesystem::directory_iterator iterator(directory, error);
+    const std::filesystem::directory_iterator end;
+    if (error) {
+        report.warnings.push_back("Cannot enumerate playlist directory: " + error.message());
+        return report;
     }
-    std::sort(files.begin(), files.end());
+    while (iterator != end) {
+        std::error_code entryError;
+        if (iterator->is_regular_file(entryError) && supportedPlaylistExtension(iterator->path())) {
+            files.push_back(iterator->path());
+        } else if (entryError) {
+            report.warnings.push_back("Cannot inspect playlist entry '"
+                                      + iterator->path().filename().string() + "': "
+                                      + entryError.message());
+        }
+        iterator.increment(error);
+        if (error) {
+            report.warnings.push_back("Error while enumerating playlists: " + error.message());
+            error.clear();
+        }
+    }
+    std::sort(files.begin(), files.end(), [](const auto& left, const auto& right) {
+        return lowerAscii(left.filename().string()) < lowerAscii(right.filename().string());
+    });
 
     for (const auto& file : files) {
-        std::ifstream input(file);
+        std::ifstream input(file, std::ios::binary);
         if (!input) {
             report.warnings.push_back("Cannot read playlist: " + file.string());
             continue;
@@ -155,27 +335,37 @@ LoadReport M3uLoader::loadDirectory(const std::filesystem::path& directory,
         std::vector<Song::Id> ids;
         std::string line;
         std::size_t lineNumber = 0;
+        bool rejected = false;
         while (std::getline(input, line)) {
             ++lineNumber;
+            if (lineNumber == 1) removeBom(line);
+            if (line.size() > maxRecordBytes) {
+                report.warnings.push_back(file.filename().string() + " line "
+                                          + std::to_string(lineNumber)
+                                          + ": entry exceeds the 1 MiB safety limit");
+                rejected = true;
+                continue;
+            }
             line = trim(line);
             if (line.empty() || line.front() == '#') continue;
-            std::filesystem::path audioPath = line;
-            if (audioPath.is_relative()) {
-                const auto projectRoot = directory.parent_path().parent_path();
-                if (audioPath.begin() != audioPath.end()
-                    && audioPath.begin()->string() == directory.parent_path().filename().string()) {
-                    audioPath = projectRoot / audioPath;
-                } else {
-                    audioPath = file.parent_path() / audioPath;
-                }
-            }
-            const auto found = songsByPath.find(pathKey(audioPath));
-            if (found == songsByPath.end()) {
-                report.warnings.push_back(file.filename().string() + " line " + std::to_string(lineNumber)
-                                          + ": track is not in the library");
+            const auto resolved = resolvePlaylistPath(file, std::filesystem::u8path(line));
+            const auto song = library.findByPath(resolved);
+            if (!song) {
+                report.warnings.push_back(file.filename().string() + " line "
+                                          + std::to_string(lineNumber)
+                                          + ": track is not in the library: " + line);
             } else {
-                ids.push_back(found->second);
+                ids.push_back(song->get().id());
             }
+        }
+        if (input.bad()) {
+            report.warnings.push_back("I/O error while reading playlist: " + file.string());
+            continue;
+        }
+        if (ids.empty()) {
+            report.warnings.push_back(file.filename().string()
+                                      + ": playlist is empty after resolving library tracks"
+                                      + (rejected ? " (one or more entries were rejected)" : ""));
         }
         playlists.emplace_back(file.stem().string(), file, std::move(ids));
         ++report.loaded;

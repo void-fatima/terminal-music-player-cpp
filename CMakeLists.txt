@@ -18,6 +18,7 @@ add_library(music-player-core STATIC
     src/MusicLibrary.cpp
     src/Playlist.cpp
     src/Song.cpp
+    src/StableId.cpp
 )
 target_include_directories(music-player-core PUBLIC src)
 target_compile_features(music-player-core PUBLIC cxx_std_17)

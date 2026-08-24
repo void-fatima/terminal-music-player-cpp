@@ -4,7 +4,9 @@
 
 #include <functional>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace music_player {
@@ -17,6 +19,9 @@ public:
 
     const std::vector<Song>& songs() const noexcept;
     std::optional<std::reference_wrapper<const Song>> findById(Song::Id id) const noexcept;
+    std::optional<std::reference_wrapper<const Song>> findByPath(
+        const std::filesystem::path& path) const;
+    bool containsPath(const std::filesystem::path& path) const;
 
     SearchResults searchByTitle(std::string_view query) const;
     SearchResults searchByArtist(std::string_view query) const;
@@ -34,7 +39,11 @@ public:
     void clear() noexcept;
 
 private:
+    void rebuildIndexes();
+
     std::vector<Song> songs_;
+    std::unordered_map<Song::Id, std::size_t> idIndex_;
+    std::unordered_map<std::string, Song::Id> pathIndex_;
 };
 
 }  // namespace music_player
