@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "ConfigManager.h"
+#include "SessionController.h"
 
 #include "TestSupport.h"
 
@@ -21,7 +22,7 @@ int main() {
     std::filesystem::create_directories(data / "Playlists", error);
 
     std::istringstream input{
-        "list\n"
+        "\xEF\xBB\xBFlist\n"
         "queue add 1\n"
         "queue add 2\n"
         "queue move 2 1\n"
@@ -49,6 +50,10 @@ int main() {
     test.expect(text.find("First Track") != std::string::npos
                     && text.find("Second Track") != std::string::npos,
                 "library, queue, and search display real track metadata");
+    const auto unknown = text.find("unknown command");
+    test.expect(unknown != std::string::npos
+                    && text.find("unknown command", unknown + 1) == std::string::npos,
+                "a UTF-8 BOM on redirected input does not corrupt the first command");
     test.expect(text.find("Queue 1/2") != std::string::npos,
                 "status identifies the selected queue item");
     test.expect(text.find("State: PAUSED") != std::string::npos,
@@ -72,5 +77,15 @@ int main() {
                                std::make_unique<test_support::FakeAudioBackend>()};
     test.expect(eofApplication.run() == 0,
                 "redirected EOF exits cleanly without blocking or requiring a command");
+
+    SessionController session{data, std::make_unique<test_support::FakeAudioBackend>()};
+    test.expect(session.load() && session.playlists().size() == 1,
+                "session reloads the edited playlist fixture");
+    session.setActivePlaylist(0);
+    std::string deleteError;
+    test.expect(session.deletePlaylist(0, deleteError) && !session.activePlaylist()
+                    && session.playlists().empty(),
+                "deleting the active playlist clears session selection safely");
+    test.expect(session.shutdown(), "session with a deleted active playlist shuts down cleanly");
     return test.finish("application");
 }

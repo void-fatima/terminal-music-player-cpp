@@ -43,6 +43,7 @@ public:
     bool playPlaylist(std::size_t playlistIndex, std::size_t trackIndex);
     bool enqueueLibrary(std::size_t index);
     bool enqueuePlaylist(std::size_t index);
+    bool deletePlaylist(std::size_t index, std::string& error);
     bool setVolume(float volume);
     void setMode(PlaybackMode mode);
     void setMessage(std::string message, bool isError = false);

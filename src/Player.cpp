@@ -79,7 +79,11 @@ struct Player::Impl {
         } else {
             if (!backend->stop()) return fail("Cannot stop at the end of the queue.");
             state = PlaybackState::Stopped;
-            error.clear();
+            if (automatic) {
+                error.clear();
+                return true;
+            }
+            error = "Already at the end of the queue.";
             return false;
         }
         return startCurrent();

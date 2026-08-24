@@ -173,6 +173,15 @@ bool SessionController::enqueuePlaylist(std::size_t index) {
     return true;
 }
 
+bool SessionController::deletePlaylist(std::size_t index, std::string& error) {
+    if (!playlistManager_.erase(index, error)) return false;
+    if (activePlaylist_) {
+        if (*activePlaylist_ == index) activePlaylist_.reset();
+        else if (*activePlaylist_ > index) --*activePlaylist_;
+    }
+    return saveSettings();
+}
+
 bool SessionController::setVolume(float volume) {
     if (!player_.setVolume(volume)) {
         setMessage(player_.lastError(), true);

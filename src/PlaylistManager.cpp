@@ -1,5 +1,7 @@
 #include "PlaylistManager.h"
 
+#include "StableId.h"
+
 #include <algorithm>
 #include <cctype>
 #include <limits>
@@ -84,6 +86,16 @@ bool PlaylistManager::rename(std::size_t index, const std::string& name, std::st
     const auto extension = lowerAscii(oldPath.extension().string()) == ".m3u" ? ".m3u" : ".m3u8";
     const auto newPath = directory_ / (name + extension);
     Playlist replacement{name, newPath, playlists_[index].songIds()};
+    if (oldPath != newPath && normalizedPathKey(oldPath) == normalizedPathKey(newPath)) {
+        std::error_code filesystemError;
+        std::filesystem::rename(oldPath, newPath, filesystemError);
+        if (filesystemError) {
+            error = "Cannot change playlist filename casing: " + filesystemError.message();
+            return false;
+        }
+        playlists_[index] = std::move(replacement);
+        return true;
+    }
     if (!writer_.write(newPath, serialize(replacement), error)) return false;
     if (oldPath != newPath) {
         std::error_code filesystemError;

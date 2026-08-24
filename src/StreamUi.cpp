@@ -54,7 +54,15 @@ int StreamUi::run() {
     output_ << "Type 'help' for commands.\n";
 
     std::string line;
+    bool firstLine = true;
     while (std::getline(input_, line)) {
+        if (firstLine && line.size() >= 3
+            && static_cast<unsigned char>(line[0]) == 0xEF
+            && static_cast<unsigned char>(line[1]) == 0xBB
+            && static_cast<unsigned char>(line[2]) == 0xBF) {
+            line.erase(0, 3);
+        }
+        firstLine = false;
         (void)session_.tick();
         if (!execute(line)) break;
     }
@@ -168,7 +176,7 @@ bool StreamUi::execute(const std::string& line) {
             values >> selectedText >> confirmation;
             const auto selected = index(selectedText, session_.playlists().size());
             if (lower(confirmation) != "yes") output_ << "Error: append 'yes' to confirm playlist deletion.\n";
-            else showResult(selected && session_.playlistManager().erase(*selected, error));
+            else showResult(selected && session_.deletePlaylist(*selected, error));
         } else if (action == "enqueue") {
             const auto selected = index(rest, session_.playlists().size());
             showResult(selected && session_.enqueuePlaylist(*selected));

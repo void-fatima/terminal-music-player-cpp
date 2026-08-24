@@ -162,7 +162,7 @@ public:
 
 class FailingAtomicOps final : public music_player::IAtomicFileOps {
 public:
-    enum class Stage { None, Directory, Temporary, Replacement };
+    enum class Stage { None, Directory, TemporaryOpen, Write, Replacement };
     explicit FailingAtomicOps(Stage failure) : failure_(failure) {}
     bool createParentDirectories(const std::filesystem::path&, std::string& error) override {
         if (failure_ == Stage::Directory) { error = "injected directory failure"; return false; }
@@ -172,7 +172,8 @@ public:
                               const std::string& contents,
                               std::filesystem::path& temporary,
                               std::string& error) override {
-        if (failure_ == Stage::Temporary) { error = "injected write failure"; return false; }
+        if (failure_ == Stage::TemporaryOpen) { error = "injected temporary open failure"; return false; }
+        if (failure_ == Stage::Write) { error = "injected write failure"; return false; }
         temporary = target.string() + ".injected.tmp";
         savedContents = contents;
         return true;

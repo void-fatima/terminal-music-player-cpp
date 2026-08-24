@@ -8,6 +8,7 @@
 #include "TestSupport.h"
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -145,13 +146,16 @@ void m3uAndPlaylistTests(Runner& test) {
                 "playlist tracks can be reordered");
     test.expect(manager.removeTrack(created, 1, error), "playlist tracks can be removed");
     test.expect(manager.rename(created, "Driving", error), "playlist can be renamed safely");
+    test.expect(manager.rename(created, "DRIVING", error)
+                    && manager.playlists()[created].name() == "DRIVING",
+                "case-only playlist renames work across filesystem semantics");
     const auto reloaded = manager.reload();
     test.expect(reloaded.loaded >= 3
                     && std::any_of(manager.playlists().begin(), manager.playlists().end(), [](const auto& value) {
-                           return value.name() == "Driving" && value.songIds().size() == 1;
+                           return value.name() == "DRIVING" && value.songIds().size() == 1;
                        }), "edited playlist reloads from external-compatible M3U8");
     const auto driving = std::find_if(manager.playlists().begin(), manager.playlists().end(), [](const auto& value) {
-        return value.name() == "Driving";
+        return value.name() == "DRIVING";
     });
     test.expect(driving != manager.playlists().end()
                     && manager.erase(static_cast<std::size_t>(driving - manager.playlists().begin()), error),
@@ -170,7 +174,8 @@ void configTests(Runner& test) {
                 "malformed settings retain safe defaults without discarding valid keys");
 
     for (const auto stage : {test_support::FailingAtomicOps::Stage::Directory,
-                             test_support::FailingAtomicOps::Stage::Temporary,
+                             test_support::FailingAtomicOps::Stage::TemporaryOpen,
+                             test_support::FailingAtomicOps::Stage::Write,
                              test_support::FailingAtomicOps::Stage::Replacement}) {
         auto operations = std::make_shared<test_support::FailingAtomicOps>(stage);
         music_player::ConfigManager failing{file, operations};
@@ -201,6 +206,23 @@ void configTests(Runner& test) {
     test.expect((concurrent.playbackMode == "REPEAT_ALL" || concurrent.playbackMode == "SHUFFLE")
                     && concurrent.volume >= 0.0F && concurrent.volume <= 0.7F,
                 "concurrent saves leave one complete valid settings document");
+
+    const auto abandoned = std::filesystem::path{file.string() + ".tmp.abandoned"};
+    const auto recent = std::filesystem::path{file.string() + ".tmp.recent"};
+    test_support::writeFile(abandoned, "stale");
+    test_support::writeFile(recent, "active");
+    std::error_code timeError;
+    std::filesystem::last_write_time(
+        abandoned,
+        std::filesystem::file_time_type::clock::now() - std::chrono::hours(48),
+        timeError);
+    music_player::AppSettings cleanupSettings;
+    std::string cleanupError;
+    const bool cleanupSaved = !timeError
+        && music_player::ConfigManager(file).save(cleanupSettings, cleanupError);
+    test.expect(cleanupSaved && !std::filesystem::exists(abandoned)
+                    && std::filesystem::exists(recent),
+                "atomic saves remove only abandoned matching temporaries");
 }
 
 void utf8AndCliTests(Runner& test) {

@@ -60,6 +60,7 @@ public:
                               const std::string& contents,
                               std::filesystem::path& temporary,
                               std::string& error) override {
+        cleanupAbandoned(target);
         for (int attempt = 0; attempt < 64; ++attempt) {
             const auto stamp = static_cast<unsigned long long>(
                 std::chrono::steady_clock::now().time_since_epoch().count());
@@ -166,6 +167,26 @@ public:
     void removeFile(const std::filesystem::path& file) noexcept override {
         std::error_code ignored;
         std::filesystem::remove(file, ignored);
+    }
+
+private:
+    static void cleanupAbandoned(const std::filesystem::path& target) noexcept {
+        const auto directory = target.parent_path();
+        const auto prefix = target.filename().string() + ".tmp.";
+        const auto cutoff = std::filesystem::file_time_type::clock::now()
+            - std::chrono::hours(24);
+        std::error_code error;
+        std::filesystem::directory_iterator iterator(directory, error);
+        const std::filesystem::directory_iterator end;
+        while (!error && iterator != end) {
+            const auto name = iterator->path().filename().string();
+            std::error_code entryError;
+            const auto modified = iterator->last_write_time(entryError);
+            if (!entryError && name.rfind(prefix, 0) == 0 && modified < cutoff) {
+                std::filesystem::remove(iterator->path(), entryError);
+            }
+            iterator.increment(error);
+        }
     }
 };
 

@@ -28,6 +28,8 @@ __MACOSX/
 
 # Runtime/generated settings
 Data/settings.cfg
+Data/settings.cfg.tmp.*
+Data/Playlists/*.tmp.*
 
 # Local audio files
 Data/music/*

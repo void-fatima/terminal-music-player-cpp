@@ -67,7 +67,8 @@ public:
 
     Element render() {
         std::vector<Element> layers;
-        layers.push_back(vbox({navigation(), separator(), body(), separator(), footer(), messageBar()}));
+        layers.push_back(vbox({navigation(), separator(), body() | flex,
+                               separator(), footer(), messageBar()}));
         if (helpVisible) layers.push_back(helpOverlay());
         if (editAction != EditAction::None) layers.push_back(editOverlay());
         if (deleteConfirmation) layers.push_back(confirmOverlay());
@@ -349,7 +350,7 @@ private:
     bool confirmationEvent(const Event& event) {
         if (event == Event::Character("y") || event == Event::Character("Y")) {
             std::string error;
-            const bool success = session.playlistManager().erase(playlistSelection, error);
+            const bool success = session.deletePlaylist(playlistSelection, error);
             session.setMessage(success ? "Playlist deleted." : error, !success);
             deleteConfirmation = false;
             clampSelections();
