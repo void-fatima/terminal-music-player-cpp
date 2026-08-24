@@ -29,6 +29,13 @@ int main(int argc, char* argv[]) {
         if (parsed.options.noColor) (void)setenv("NO_COLOR", "1", 1);
 #endif
         const auto dataDirectory = music_player::resolveDataDirectory(parsed.options, argv[0]);
+        if (parsed.options.snapshot) {
+            music_player::SessionController session{dataDirectory};
+            if (!session.load()) return 1;
+            music_player::TerminalUi interface{session};
+            std::cout << interface.snapshot();
+            return session.shutdown() ? 0 : 1;
+        }
         if (parsed.options.nonInteractive || !music_player::standardStreamsAreTerminals()) {
             music_player::Application application{std::cin, std::cout, dataDirectory};
             return application.run();

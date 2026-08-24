@@ -551,4 +551,12 @@ int TerminalUi::run() {
     return 0;
 }
 
+std::string TerminalUi::snapshot(int width, int height) {
+    UiState state{session_};
+    auto screen = ftxui::Screen::Create(ftxui::Dimension::Fixed(width),
+                                        ftxui::Dimension::Fixed(height));
+    ftxui::Render(screen, state.render());
+    return screen.ToString();
+}
+
 }  // namespace music_player

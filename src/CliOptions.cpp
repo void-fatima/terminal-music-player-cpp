@@ -61,6 +61,7 @@ CliParseResult parseCli(const std::vector<std::string>& arguments) {
         if (argument == "--help" || argument == "-h") result.options.help = true;
         else if (argument == "--non-interactive") result.options.nonInteractive = true;
         else if (argument == "--no-color") result.options.noColor = true;
+        else if (argument == "--snapshot") result.options.snapshot = true;
         else if (argument == "--data-dir") {
             if (index + 1 >= arguments.size() || arguments[index + 1].rfind("--", 0) == 0) {
                 result.error = "--data-dir requires a path value.";
@@ -138,6 +139,7 @@ std::string usage() {
            "  --data-dir PATH       Use PATH for library.csv, Playlists, and settings.cfg\n"
            "  --non-interactive     Use the deterministic line/stream interface\n"
            "  --no-color            Disable terminal colors\n"
+           "  --snapshot            Render one deterministic UI frame and exit\n"
            "  -h, --help            Show this help and exit\n";
 }
 

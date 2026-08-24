@@ -244,6 +244,8 @@ void utf8AndCliTests(Runner& test) {
     test.expect(!music_player::parseCli({"--data-dir"}), "CLI rejects a missing option value");
     test.expect(!music_player::parseCli({"--unknown"}), "CLI rejects unknown options");
     test.expect(music_player::parseCli({"--help"}).options.help, "CLI recognizes help");
+    test.expect(music_player::parseCli({"--snapshot"}).options.snapshot,
+                "CLI recognizes deterministic UI snapshot mode");
 }
 
 }  // namespace

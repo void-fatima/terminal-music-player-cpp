@@ -12,6 +12,7 @@ struct CliOptions {
     bool help{false};
     bool nonInteractive{false};
     bool noColor{false};
+    bool snapshot{false};
 };
 
 struct CliParseResult {
