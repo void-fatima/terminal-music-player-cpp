@@ -25,6 +25,18 @@
 - Real audio playback through the bundled `miniaudio` library
 - Cross-platform CMake configuration and automated core/application tests
 
+## Interface tour
+
+| Library browsing | M3U playlists |
+|---|---|
+| Search, filter, sort, and start any track directly from the library. | Select a playlist, inspect its ordered tracks, and make it active. |
+| ![Library screen showing track metadata and commands](docs/images/library-screen.png) | ![Playlists screen showing available playlists and tracks](docs/images/playlists-screen.png) |
+
+| Now playing | Search and settings |
+|---|---|
+| Monitor progress and control the queue, seeking, and playback mode. | Find music across metadata and persist volume and repeat preferences. |
+| ![Now Playing screen showing playback progress and controls](docs/images/now-playing-screen.png) | ![Search results and persistent settings screens](docs/images/search-settings-screen.png) |
+
 ## Requirements
 
 - A C++17 compiler (MSVC, GCC, or Clang)
