@@ -16,11 +16,13 @@ add_library(music-player-core STATIC
     src/AtomicFile.cpp
     src/ConfigManager.cpp
     src/DataLoader.cpp
+    src/InputMapping.cpp
     src/MusicLibrary.cpp
     src/Playlist.cpp
     src/PlaylistManager.cpp
     src/Song.cpp
     src/StableId.cpp
+    src/Utf8.cpp
 )
 target_include_directories(music-player-core PUBLIC src)
 target_compile_features(music-player-core PUBLIC cxx_std_17)
@@ -40,9 +42,19 @@ elseif(UNIX AND NOT APPLE)
 endif()
 music_player_warnings(music-player-audio)
 
-add_executable(terminal-music-player src/main.cpp src/Application.cpp)
+add_library(music-player-application STATIC
+    src/Application.cpp
+    src/SessionController.cpp
+    src/StreamUi.cpp
+)
+target_include_directories(music-player-application PUBLIC src)
+target_compile_features(music-player-application PUBLIC cxx_std_17)
+target_link_libraries(music-player-application PUBLIC music-player-core music-player-audio)
+music_player_warnings(music-player-application)
+
+add_executable(terminal-music-player src/main.cpp)
 target_compile_features(terminal-music-player PRIVATE cxx_std_17)
-target_link_libraries(terminal-music-player PRIVATE music-player-core music-player-audio)
+target_link_libraries(terminal-music-player PRIVATE music-player-application)
 music_player_warnings(terminal-music-player)
 
 if(BUILD_TESTING)
@@ -52,7 +64,7 @@ if(BUILD_TESTING)
     add_test(NAME core-tests COMMAND terminal-music-player-tests)
 
     add_executable(terminal-music-player-app-tests tests/ApplicationTests.cpp)
-    target_link_libraries(terminal-music-player-app-tests PRIVATE music-player-core music-player-audio)
+    target_link_libraries(terminal-music-player-app-tests PRIVATE music-player-application)
     music_player_warnings(terminal-music-player-app-tests)
     add_test(NAME application-tests COMMAND terminal-music-player-app-tests)
 endif()
